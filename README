@@ -1,0 +1,124 @@
+ONION ROUTING
+
+How to use:
+    Open up multiple terminals (4 is a good number) to this directory.
+    In all but one of the terminals, run
+        java OnionNode <port number>
+    where <port number> is a unique, non-reserved port number.
+
+    The nodes will create files in the public_keys/ directory whose names will be the port numbers.
+
+    In the last terminal, run
+        java OnionNode -n <path of length> <port number>
+    where <path length> is however long you want a path to be and <port number> is again a unique,
+    non-reserved port number. This node is the SOURCE node.
+
+    The SOURCE node will set up a connection along a random path through the onion network
+    and will prompt you for a message to send. The message is terminated by pressing <ENTER>
+    (a carriage return / line feed). The connection persists through multiple messages. The messages will
+    show up unencrypted at the last node in the path. The RELAY nodes in the middle of the path will also
+    output logs.
+
+    To tear down a connection and establish a new one, enter a '.' (a period excluding quotes) by itself
+    in a message. To close down a connection without establishing a new one, press <CTRL+D>.
+
+    
+    If there are any problems, ensure that the only files in public_keys/ are the non-SOURCE nodes.
+
+
+Background:
+    My goal was to learn about some of the subtleties of the Tor network by creating my own onion routing network.
+
+    Some limits were placed on this project to limit its scope so it could be finished by the end of
+    this semester.
+        All nodes run on a single machine (localhost) and are identified solely by their port numbers.
+
+        The connection uses UDP to simplify connection setup (as suggested by Professor Yang).
+
+        The connection is only one-way (from SOURCE to the last node in the path), though making it two-way
+        would be relatively simple given the existing infrastructure.
+
+        The 'network' can only handle one connection at a time.
+
+        There is no 'end' server. Since the last node in a Tor path can usually read the message anyway,
+        the last node in this program just outputs the message. 
+
+    Despite these lack of features, it does provide a good example of how onion routing (specifically Tor)
+    works.
+
+Implementation:
+    All nodes create a public/private key pair and store their public key in the directory public_keys/.
+    The source node uses the public keys to set up a connection through these nodes by sharing a secret 
+    (symmetric) key with them.
+        First, the source node generates secret keys for all the nodes in the path.
+
+        Then it uses the first node's public key to encrypt the secret key and sends it to the first node.
+
+        The first node uses its private key to decrypt the message, maps the sender (port) to the secret
+        key, and sends a symmetrically encrypted confirmation.
+
+        The source node receives this encrypted confirmation. Then, it encrypts a secret key for the second
+        node using the second node's public key. Then it encrypts the result with the first node's secret
+        key. The message is then sent.
+
+        The first node is able to decrypt the message with its secret key and to determine where to forward
+        the packet to. Then the second node performs the same operations that the first node did in step 3.
+
+        The same pattern applies for the rest of the nodes until all nodes along the path has its symmetric
+        key.
+
+    The steps above are essentially what we discussed in class.
+
+    Now, when the first node encrypts its messages in layers, each node has a secret key that it can use to determine
+    where to forward a packet to.    
+
+    I used '#!' in a message to signal that the next 4 bytes are the port number that a packet should be forwarded
+    to. '##' is used to signal a connection tear down. '.' is used to signal a connection tear down at the
+    last node.
+
+    For the asymmetric cryptography step, I used RSA. For the symmetric step, I used AES.
+
+Remarks:
+    This is not particularly robust or entirely secure. Since it's only one-way, each node knows how many nodes
+    are after it in the network (packets only move backwards along the path during set up). This can be easily
+    fixed by implementing a two-way connection. 
+
+    Over the course of the project, I realized why using symmetric cryptography was an optimization (as discussed in
+    class). Asymmetric cryptography necessarily creates large cipher texts that in turn have to be encrypted
+    again and again. A public key is only good at encrypting an input that's a certain proportion smaller than
+    the key, so encrypting/decrypting with large keys for even larger cipher texts would be too difficult. This is
+    why the public keys are used only to pass the relatively small symmetric keys to the nodes along the path.
+
+Deficiencies and Remaining Questions:
+    I encountered some difficulties trying to learn how to use Java's cryptography libraries, but these have been
+    ironed out. However, specific implementations of RSA and AES aren't specified (the default ones are used), which
+    could create some problems with different Java libraries.
+
+    I don't understand how / know if more than one connection can pass through one node. If two connections have two
+    or more consecutive nodes in common, then the second node would not be able to tell the difference between the
+    two connections since it is only aware of its immediate neighbors. How does Tor ensure that this situation
+    doesn't happen if two different sources choose intersecting paths like this?
+
+    Lots of temporary byte arrays are created for easy reasoning, but this can waste a lot of space.
+
+    Maps are used to associate packets from a preceding node (in the path) to a SecretKey and to associate a
+    proceeding node with its preceding node in the path. This can create confusion if the proceeding node wants
+    to establish a new connection. Thus, this network currently only works with one connection.
+    
+
+Future improvements:
+    One obvious one is to implement a two-way connection.
+
+    The project could also be extended to a real network by using IP addresses + ports instead of just ports.
+
+    Using TCP instead of UDP to ensure reliable connections.
+
+    Implementing timeouts and connection re-setup in case of failure along a path.
+
+    Abstracting a node so it can either be a relay or a source.
+
+    Support multiple connections.
+
+
+THANK YOU FOR A GREAT SEMESTER PROFESSOR YANG!
+I learned an enormous amount in this class.
